@@ -1,12 +1,13 @@
 # encoding: utf-8
-# Copyright (C) 2015 John Törnblom
+# Copyright (C) 2016 John Törnblom
 '''
 Keep version info in one single place
 '''
 
 
 name = 'pyrsl'
-date = '2016-03-25'
-release = '0.5.0'
+date = '2017-05-28'
+version = '0.7'
+release = '0.7.0b1' #  # ensure that this is the same as in setup.py
 
 complete_string = '%s v%s (%s)' % (name, release, date)

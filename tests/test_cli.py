@@ -86,6 +86,7 @@ class TestCommandLineInterface(unittest.TestCase):
         
         self.assertEqual(0, rsl.main(argv))
     
+        # expect two uniqueness constrain violations
         script.file.write('.create object instance cls of Cls\n')
         script.file.write('.assign cls.Id = "test"\n')
         script.file.flush()

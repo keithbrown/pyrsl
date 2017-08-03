@@ -1,5 +1,5 @@
 # encoding: utf-8
-# Copyright (C) 2015-2016 John Törnblom
+# Copyright (C) 2015-2017 John Törnblom
 '''
 Parser for the rule-specification language (RSL). 
 Heavily inspired by: 
@@ -35,6 +35,7 @@ class RSLParser(object):
               'UNRELATE',
               'ACROSS',
               'FROM',
+              'USING',
               'OF',
               'IF',
               'TO',
@@ -112,7 +113,7 @@ class RSLParser(object):
        ('rt', 'exclusive'),  # relationship traversal
        ('psv', 'exclusive'),  # pre-substitution variable (format)
        ('sv', 'inclusive'),  # substitution variable
-       ('pc', 'inclusive'),  # substitution variable
+       ('pc', 'inclusive'),  # pre-control (start of line with control word)
        ('control', 'inclusive'),  # control (action language instruction)
        ('str', 'inclusive'),  # string delimited by quotation marks
     )
@@ -388,11 +389,11 @@ class RSLParser(object):
         t.endlexpos = t.lexpos + len(t.value)
         t.lexer.begin('control')
         return t
-    
-    def t_pc_WORD(self, t):
-        r"\.([a-zA-Z][0-9a-zA-Z_]*|[a-zA-Z][0-9a-zA-Z_]*[0-9a-zA-Z_]+)"
-        t.endlexpos = t.lexpos + len(t.value)
-        return t
+
+    def t_pc_LITERAL(self, t):
+        r"\.[^\n]*"
+        raise ParseException("invalid control statement at %s:%s" % (self.filename,
+                                                                     t.lineno))
     
     def t_control_TO(self, t):
         r"(?i)to(?=\s)"
@@ -401,6 +402,11 @@ class RSLParser(object):
     
     def t_control_ACROSS(self, t):
         r"(?i)across(?=[\s])"
+        t.endlexpos = t.lexpos + len(t.value)
+        return t
+    
+    def t_control_USING(self, t):
+        r"(?i)using(?=\s)"
         t.endlexpos = t.lexpos + len(t.value)
         return t
     
@@ -437,6 +443,12 @@ class RSLParser(object):
     def t_control_TYPE(self, t):
         r"(?i)(boolean|integer|real|string|inst_ref|inst_ref_set|frag_ref)(?=\s)"
         t.endlexpos = t.lexpos + len(t.value)
+        return t
+
+    def t_control_TYPE2(self, t):
+        r"(?i)(inst_ref|inst_ref_set|frag_ref)(?=<[^>]+>\s)"
+        t.endlexpos = t.lexpos + len(t.value)
+        t.type = 'TYPE'
         return t
     
     def t_control_AND(self, t):
@@ -692,33 +704,33 @@ class RSLParser(object):
         return t
     
     def t_error(self, t):
-        logger.error("%d,%d:illegal character '%s' in INITIAL" % (t.lineno,
-                                                                  t.lexpos,
-                                                                  t.value[0]))
+        logger.error("%s:%d:illegal character '%s'" % (self.filename,
+                                                       t.lineno,
+                                                       t.value[0]))
         t.lexer.skip(1)
     
     def t_comment_error(self, t):
-        logger.error("%d,%d:illegal character '%s' in comment" % (t.lineno,
-                                                                  t.lexpos,
-                                                                  t.value[0]))
+        logger.error("%s:%d:illegal character '%s'" % (self.filename,
+                                                       t.lineno,
+                                                       t.value[0]))
         t.lexer.skip(1)
     
     def t_rt_error(self, t):
-        logger.error("%d,%d:illegal character '%s' on rt" % (t.lineno,
-                                                             t.lexpos,
-                                                             t.value[0]))
+        logger.error("%s:%d:illegal character '%s'" % (self.filename,
+                                                       t.lineno,
+                                                       t.value[0]))
         t.lexer.skip(1)
     
     def t_literal_error(self, t):
-        logger.error("%d,%d:illegal character '%s' in literal" % (t.lineno,
-                                                                  t.lexpos,
-                                                                  t.value[0]))
+        logger.error("%s:%d:illegal character '%s'" % (self.filename,
+                                                       t.lineno,
+                                                       t.value[0]))
         t.lexer.skip(1)
     
     def t_psv_error(self, t):
-        logger.error("%d,%d:illegal character '%s' in psv" % (t.lineno,
-                                                              t.lexpos,
-                                                              t.value[0]))
+        logger.error("%s:%d:illegal character '%s'" % (self.filename,
+                                                       t.lineno,
+                                                       t.value[0]))
         t.lexer.skip(1)
     
     def p_archetypeprogram_1(self, p):
@@ -918,6 +930,18 @@ class RSLParser(object):
         p[0].filename = self.filename
         p[0].lineno = p.lineno(0)
         
+    def p_relate_using_statement_1(self, p):
+        '''statement : RELATE inst_ref_var TO inst_ref_var ACROSS WORD USING inst_ref_var'''
+        p[0] = ast.RelateUsingNode(p[2], p[4], p[6], '', p[8])
+        p[0].filename = self.filename
+        p[0].lineno = p.lineno(0)
+        
+    def p_relate_using_statement_2(self, p):
+        '''statement : RELATE inst_ref_var TO inst_ref_var ACROSS WORD DOT PHRASE USING inst_ref_var'''
+        p[0] = ast.RelateUsingNode(p[2], p[4], p[6], p[8], p[10])
+        p[0].filename = self.filename
+        p[0].lineno = p.lineno(0)
+        
     def p_unrelate_statement_1(self, p):
         '''statement : UNRELATE inst_ref_var FROM inst_ref_var ACROSS WORD'''
         p[0] = ast.UnrelateNode(p[2], p[4], p[6], '')
@@ -930,6 +954,18 @@ class RSLParser(object):
         p[0].filename = self.filename
         p[0].lineno = p.lineno(0)
     
+    def p_unrelate_statement_using_1(self, p):
+        '''statement : UNRELATE inst_ref_var FROM inst_ref_var ACROSS WORD USING inst_ref_var'''
+        p[0] = ast.UnrelateUsingNode(p[2], p[4], p[6], '', p[8])
+        p[0].filename = self.filename
+        p[0].lineno = p.lineno(0)
+        
+    def p_unrelate_statement_using_2(self, p):
+        '''statement : UNRELATE inst_ref_var FROM inst_ref_var ACROSS WORD DOT PHRASE USING inst_ref_var'''
+        p[0] = ast.UnrelateUsingNode(p[2], p[4], p[6], p[8], p[10])
+        p[0].filename = self.filename
+        p[0].lineno = p.lineno(0)
+        
     def p_whereclause_1(self, p):
         """whereclause : """
         p[0] = ast.WhereNode()
@@ -949,13 +985,25 @@ class RSLParser(object):
         p[0].lineno = p.lineno(0)
     
     def p_fparameters_3(self, p):
-        """fparameters : fparameters PARAM TYPE param_name lineabreak"""
+        """fparameters : fparameters PARAM param_type param_name lineabreak"""
         p[0] = p[1]
         param = ast.ParameterNode(p[3], p[4])
         param.filename = self.filename
         param.lineno = p.lineno(2)
         p[0].parameters.append(param)
     
+    def p_param_type_1(self, p):
+        '''
+        param_type : TYPE
+        '''
+        p[0] = ast.ParameterTypeNode(p[1])
+    
+    def p_param_type_2(self, p):
+        '''
+        param_type : TYPE LT function_identifier GT
+        '''
+        p[0] = ast.ParameterTypeNode(p[1], p[3])
+     
     def p_fbody_0(self, p):
         """fbody : """
         p[0] = ast.StatementListNode()
@@ -1245,6 +1293,10 @@ class RSLParser(object):
     def p_param_name_1(self, p):
         """param_name : WORD"""
         p[0] = p[1]
+
+    def p_param_name_2(self, p):
+        """param_name : keyword"""
+        p[0] = p[1]
         
     def p_frag_ref_var_1(self, p):
         """frag_ref_var : WORD"""
@@ -1454,7 +1506,7 @@ def parse_text(text, filename=''):
 
 if __name__ == '__main__':
     import sys
-    import xtuml.tools
+    import xtuml
     logging.basicConfig(level=logging.WARN)
     
     print ('Enter the character stream below. Press Ctrl-D to begin parsing.')
@@ -1473,7 +1525,7 @@ if __name__ == '__main__':
 
     print ('--------- Syntax Tree ----------')
     root = parse_text(s)
-    w = xtuml.tools.Walker()
-    w.visitors.append(xtuml.tools.NodePrintVisitor())
+    w = xtuml.Walker()
+    w.visitors.append(xtuml.NodePrintVisitor())
     w.accept(root)
 
