@@ -170,7 +170,11 @@ two integers:
     .assign My_Concatenation = "Hello " + "world"
     .assign My_Comparison = 5 > My_Addition
     
-
+.. note:: In recent versions of the language, the *and* and *or* operators have
+	  short-circuit semantics. If the left operand of an *and* operation
+	  evaluates to *false*, the right operand is not evaluated. Likewise if
+	  the left operand of an *or* operation evaluates to *true*, the right
+	  operand is not evaluated.
 
 Compound expressions
 ^^^^^^^^^^^^^^^^^^^^
@@ -375,6 +379,9 @@ to instance.
 +-----------------+-----------------------------------------------------------+
 | \-              | Returns a set of instance references that are in the left |
 |                 | operand, but not in the right operand                     |
++-----------------+-----------------------------------------------------------+
+| \^              | Returns a set of instance references that are in the left |
+|                 | operand or in the right operand, but not in both          |
 +-----------------+-----------------------------------------------------------+
 | ==              | Check if the intersection between both operands is empty  |
 +-----------------+-----------------------------------------------------------+
@@ -909,7 +916,7 @@ of *CLS* across the association *R1* to access the attribute *Name* on the class
 
 .. code-block:: pyrsl
 
-    .assign select any cls from instances of CLS
+    .select any cls from instances of CLS
     ${cls->O_CLS[R1].Name}
 
 Transforming Substitution Variables

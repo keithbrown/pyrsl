@@ -101,6 +101,8 @@ class RSLParser(object):
               'UMINUS',
               'SLASH',
               'AMPERSAND',
+              'CARET',
+              'PROCENT',
               'STAR',
               'PLUS',
               'MINUS',
@@ -108,7 +110,6 @@ class RSLParser(object):
               'RBRAC')
     
     states = (
-       ('comment', 'exclusive'),  # recognizes the internals of comments
        ('literal', 'exclusive'),  # parses literal text (output)
        ('rt', 'exclusive'),  # relationship traversal
        ('psv', 'exclusive'),  # pre-substitution variable (format)
@@ -152,13 +153,6 @@ class RSLParser(object):
         return self.parser.parse(lexer=self.lexer, 
                                  input=text,
                                  tracking=1)
-
-    def t_comment_NEWLINE(self, t):
-        r"\n"
-        t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.lineno += len(t.value)
-        t.lexer.begin('INITIAL')
-        return t
     
     def t_literal_INITIAL_pc_control_NEWLINE(self, t):
         r"\n"
@@ -198,24 +192,21 @@ class RSLParser(object):
     def t_WHITESPACE(self, t):
         r"\s"
         t.endlexpos = t.lexpos + len(t.value)
-    
-    def t_comment_TEXT(self, t):
-        r"[^ \n]+"
+
+    def t_pc_COMMENT(self, t):
+        r"(\.//|(?i)\.comment)[^\n]*\n"
         t.endlexpos = t.lexpos + len(t.value)
-        return t
-    
-    def t_comment_WHITESPACE(self, t):
-        r"\s"
+        t.lexer.lineno += t.value.count('\n')
+        t.lexer.begin('INITIAL')
+        
+    def t_control_COMMENT(self, t):
+        r"(\.//|(?i)\.comment)[^\n]*\n"
         t.endlexpos = t.lexpos + len(t.value)
-        t.type = 'TEXT'
+        t.lexer.lineno += t.value.count('\n')
+        t.type = 'NEWLINE'
+        t.lexer.begin('INITIAL')
         return t
-    
-    def t_pc_control_COMMENT(self, t):
-        r"\.//|(?i)\.comment"
-        t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.begin('comment') 
-        return t
-    
+
     def t_pc_FUNCTION(self, t):
         r"(?i)\.function"
         t.endlexpos = t.lexpos + len(t.value)
@@ -231,7 +222,7 @@ class RSLParser(object):
     def t_pc_ENDFUNCTION(self, t):
         r"(?i)\.end[\s]+function"
         t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.begin('pc')
+        t.lexer.begin('control')
         return t
     
     def t_pc_INVOKE(self, t):
@@ -297,7 +288,7 @@ class RSLParser(object):
     def t_pc_ENDIF(self, t):
         r"(?i)\.end[\s]+if"
         t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.begin('pc')
+        t.lexer.begin('control')
         return t
     
     def t_pc_FOR(self, t):
@@ -309,13 +300,13 @@ class RSLParser(object):
     def t_pc_BREAKFOR(self, t):
         r"(?i)\.break[\s]+for"
         t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.begin('pc')
+        t.lexer.begin('control')
         return t
     
     def t_pc_ENDFOR(self, t):
         r"(?i)\.end[\s]+for"
         t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.begin('pc')
+        t.lexer.begin('control')
         return t
     
     def t_pc_WHILE(self, t):
@@ -327,13 +318,13 @@ class RSLParser(object):
     def t_pc_BREAKWHILE(self, t):
         r"(?i)\.break[\s]+while"
         t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.begin('pc')
+        t.lexer.begin('control')
         return t
     
     def t_pc_ENDWHILE(self, t):
         r"(?i)\.end[\s]+while"
         t.endlexpos = t.lexpos + len(t.value)
-        t.lexer.begin('pc')
+        t.lexer.begin('control')
         return t
     
     def t_pc_INCLUDE(self, t):
@@ -506,7 +497,7 @@ class RSLParser(object):
         t.lexer.pop_state()
         return t
     
-    def t_comment_literal_DOLLAR(self, t):
+    def t_literal_DOLLAR(self, t):
         r"\$"
         t.endlexpos = t.lexpos + len(t.value)
         t.lexer.push_state('psv')
@@ -672,6 +663,11 @@ class RSLParser(object):
         r"\&"
         t.endlexpos = t.lexpos + len(t.value)
         return t
+
+    def t_CARET(self, t):
+        r"\^"
+        t.endlexpos = t.lexpos + len(t.value)
+        return t
     
     def t_LT(self, t):
         r"\<"
@@ -709,12 +705,6 @@ class RSLParser(object):
                                                        t.value[0]))
         t.lexer.skip(1)
     
-    def t_comment_error(self, t):
-        logger.error("%s:%d:illegal character '%s'" % (self.filename,
-                                                       t.lineno,
-                                                       t.value[0]))
-        t.lexer.skip(1)
-    
     def t_rt_error(self, t):
         logger.error("%s:%d:illegal character '%s'" % (self.filename,
                                                        t.lineno,
@@ -736,21 +726,9 @@ class RSLParser(object):
     def p_archetypeprogram_1(self, p):
         """archetypeprogram : archetypebody"""
         p[0] = p[1]
-    
-    def p_comment_1(self, p):
-        """comment : COMMENT commentbody NEWLINE"""
-    
-    def p_commentbody_1(self, p):
-        """commentbody : """
-    
-    def p_commentbody_2(self, p):
-        """commentbody : commentbody TEXT"""
-    
+        
     def p_linebreak_1(self, p):
         """lineabreak : NEWLINE"""
-    
-    def p_linebreak_2(self, p):
-        """lineabreak : comment"""
         
     def p_archetypebody_1(self, p):
         """archetypebody : code"""
@@ -768,10 +746,6 @@ class RSLParser(object):
         """code : code statement"""
         p[0] = p[1]
         p[0].statements.append(p[2])
-    
-    def p_code_3(self, p):
-        """code : code comment"""
-        p[0] = p[1]
     
     def p_code_4(self, p):
         """code : code literal"""
@@ -1010,10 +984,6 @@ class RSLParser(object):
         p[0].filename = self.filename
         p[0].lineno = p.lineno(0)
         
-    def p_fbody_1(self, p):
-        """fbody : comment code"""
-        p[0] = p[2]
-        
     def p_fbody_2(self, p):
         """fbody : statement code"""
         p[0] = p[2]
@@ -1068,14 +1038,11 @@ class RSLParser(object):
     def p_endiffer_1(self, p):
         """endiffer : ENDIF lineabreak"""
     
-    
     def p_endwhiler_1(self, p):
         """endwhiler : ENDWHILE lineabreak"""
     
-    
     def p_endforrer_1(self, p):
         """endforrer : ENDFOR lineabreak"""
-    
     
     def p_condition_1(self, p):
         """condition : LPAREN expr RPAREN"""
@@ -1409,7 +1376,15 @@ class RSLParser(object):
     def p_bop_14(self, p):
         """bop : AMPERSAND"""
         p[0] = p[1]
-            
+
+    def p_bop_15(self, p):
+        """bop : PROCENT"""
+        p[0] = p[1]
+        
+    def p_bop_16(self, p):
+        """bop : CARET"""
+        p[0] = p[1]
+
     def p_literal_1(self, p):
         """literal : LITERAL literalbody NEWLINE"""
         p[0] = p[2]
